@@ -84,8 +84,8 @@ async fn main() -> Result<(), BatTestError>{
     output.flush()?;
     let avg_amps = amps_sum/entries as f64;
     let avg_watts = watts_sum/entries as f64;
-    let total_amp_hours = avg_amps/total_hours;
-    let total_watt_hours = avg_watts/total_hours;
+    let total_amp_hours = avg_amps*total_hours;
+    let total_watt_hours = avg_watts*total_hours;
     println!("Discharge complete. Sucked {} watt hours and {} amp hours out of that bad boy.", total_watt_hours, total_amp_hours);
     output.write_record(&["","",""])?;
     output.write_record(&["Finish time","Watt hours","Amp hours"])?;
