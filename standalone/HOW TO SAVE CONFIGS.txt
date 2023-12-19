@@ -1,0 +1,9 @@
+ - Copy the `custom config.bat`
+
+ - rename it to what this new config should do
+
+ - right click -> edit
+
+ - for any feilds you want to make constant in that configuration, remove the block that asks for user input and replace `%variable_name%` with it's new value.
+
+ - SAVE
