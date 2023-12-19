@@ -3,7 +3,7 @@ my email is paul@fornage.net
 
 However people should know that the exe needs launch arguments to work, or else it will just flash. run the program using the bat scripts or by making a shortcut to the exe and putting arguments in there.
 
-##Arguments
+## Arguments
 ```
 Usage: hp606n-battery-tester.exe [OPTIONS] --ip-string <IP_STRING> --gpib-addr <GPIB_ADDR> --discharge-current <DISCHARGE_CURRENT> --output-file <OUTPUT_FILE> --polling-rate <POLLING_RATE>
 
@@ -26,3 +26,8 @@ nd `1` otherwise [default: 1]
   -h, --help
           Print help
 ```
+
+## AA discharge graph:
+The graph is made with google sheets from the csv file this program outputs.
+
+![voltage and current](https://github.com/paulwrath1223/hp606n-battery-tester/assets/36117326/9c4a2b6e-0a65-4af8-b564-2b93408e99e0)
