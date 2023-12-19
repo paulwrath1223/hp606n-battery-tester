@@ -56,7 +56,7 @@ async fn main() -> Result<(), BatTestError>{
     let start_time = std::time::SystemTime::now();
     let mut voltage: f64;
     let mut current: f64;
-    (voltage, current) = query(&mut controller, args.gpib_addr)?;
+    (voltage, _) = query(&mut controller, args.gpib_addr)?;
 
     let interval_delay = Duration::from_secs_f64(60f64/args.polling_rate);
 
