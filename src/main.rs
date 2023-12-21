@@ -6,12 +6,13 @@ use chrono::Utc;
 use tokio::time::{self, Duration};
 use std::net::IpAddr;
 use clap::Parser;
+use prologix_gpib_ethernet_controller_manager::errors::GpibControllerError;
 use crate::errors::BatTestError;
 use prologix_gpib_ethernet_controller_manager::gpib_controller::GpibController;
 use crate::cli_struct::CliArgs;
 
 #[tokio::main]
-async fn main() -> Result<(), BatTestError>{
+async fn main() -> Result<(), BatTestError> {
     let call_time = Utc::now();
     let args = CliArgs::parse();
     let mut output = Writer::from_path(&args.output_file)?;
@@ -34,7 +35,7 @@ async fn main() -> Result<(), BatTestError>{
     let mut controller = GpibController::try_new_from(ip_addr)?;
     controller.gpib_send_to_addr("*IDN?\n", args.gpib_addr)?;
     let raw_target_device_info = controller.read_data()?;
-    let target_device_info= &raw_target_device_info[0..raw_target_device_info.len()-2];
+    let target_device_info = &raw_target_device_info[0..raw_target_device_info.len() - 2];
     println!("Target device identification: {}", target_device_info);
     output.write_record(&["Target device identification", &target_device_info, "whatever the device on the given address responded to `*IDN?` with"])?;
 
@@ -58,14 +59,14 @@ async fn main() -> Result<(), BatTestError>{
     let mut current: f64;
     (voltage, _) = query(&mut controller, args.gpib_addr)?;
 
-    let interval_delay = Duration::from_secs_f64(60f64/args.polling_rate);
+    let interval_delay = Duration::from_secs_f64(60f64 / args.polling_rate);
 
     println!("interval delay: {:?}", interval_delay);
 
     let mut interval = time::interval(interval_delay);
 
     interval.tick().await;
-    while voltage > args.cutoff_voltage{
+    while voltage > args.cutoff_voltage {
         interval.tick().await;
         (voltage, current) = query(&mut controller, args.gpib_addr)?;
         output.write_record(&[
@@ -75,20 +76,20 @@ async fn main() -> Result<(), BatTestError>{
         ])?;
         output.flush()?;
         amps_sum += current;
-        watts_sum += current*voltage;
+        watts_sum += current * voltage;
         entries += 1;
         println!("{} amps\t\t{} volts", current, voltage);
     }
-    let total_hours = start_time.elapsed()?.as_secs_f64()/3600f64;
+    let total_hours = start_time.elapsed()?.as_secs_f64() / 3600f64;
     controller.gpib_send_to_addr("INPUT OFF\n", args.gpib_addr)?;
     output.flush()?;
-    let avg_amps = amps_sum/entries as f64;
-    let avg_watts = watts_sum/entries as f64;
-    let total_amp_hours = avg_amps*total_hours;
-    let total_watt_hours = avg_watts*total_hours;
+    let avg_amps = amps_sum / entries as f64;
+    let avg_watts = watts_sum / entries as f64;
+    let total_amp_hours = avg_amps * total_hours;
+    let total_watt_hours = avg_watts * total_hours;
     println!("Discharge complete. Sucked {} watt hours and {} amp hours out of that bad boy.", total_watt_hours, total_amp_hours);
-    output.write_record(&["","",""])?;
-    output.write_record(&["Finish time","Watt hours","Amp hours"])?;
+    output.write_record(&["", "", ""])?;
+    output.write_record(&["Finish time", "Watt hours", "Amp hours"])?;
     output.write_record(&[
         &Utc::now().format("%T").to_string(),
         &total_watt_hours.to_string(),
@@ -99,7 +100,7 @@ async fn main() -> Result<(), BatTestError>{
     Ok(())
 }
 
-pub fn query(gpib_controller: &mut GpibController, gpib_address: u8) -> Result<(f64, f64), BatTestError>{
+pub fn query(gpib_controller: &mut GpibController, gpib_address: u8) -> Result<(f64, f64), BatTestError> {
     gpib_controller.gpib_send_to_addr("MEAS:VOLT?\n", gpib_address)?;
     let voltage_string = gpib_controller.read_data()?.trim();
     let voltage: f64 = sci_not_to_float(voltage_string)?;
@@ -110,15 +111,31 @@ pub fn query(gpib_controller: &mut GpibController, gpib_address: u8) -> Result<(
 }
 
 const KOSHER_CHARS: &str = "0123456789-.E";
-pub fn sci_not_to_float(str_in: &str) -> Result<f64, BatTestError>{
 
+pub fn sci_not_to_float(str_in: &str) -> Result<f64, BatTestError> {
     let mut upper_str = str_in.to_ascii_uppercase();
-    upper_str.retain(|c|{KOSHER_CHARS.contains(c)});
+    upper_str.retain(|c| { KOSHER_CHARS.contains(c) });
     let mut split = upper_str.splitn(2, 'E');
 
     let base = split.next().ok_or(BatTestError::SciNotParseError)?;
     let scale = split.next().ok_or(BatTestError::SciNotParseError)?;
     let float_base: f64 = base.parse()?;
     let scale_int: i32 = scale.parse()?;
-    Ok(float_base*(10f64.powi(scale_int)))
+    Ok(float_base * (10f64.powi(scale_int)))
+}
+
+pub fn gpib_send_and_listen_wrapper(gpib_controller: &mut GpibController, message: &str, gpib_address: u8) -> Result<Option<String>, BatTestError>{
+    gpib_controller.gpib_send_to_addr(message, gpib_address)?;
+
+    match gpib_controller.read_data() {
+        Ok(s) => {
+            Ok(Some(s.to_string()))
+        }
+        Err(GpibControllerError::TcpIoError(_)) => {
+            Ok(None)
+        }
+        Err(e) => {
+            Err(BatTestError::ControllerLibraryError(e))
+        }
+    }
 }
