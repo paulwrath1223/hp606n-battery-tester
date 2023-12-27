@@ -6,17 +6,19 @@ use chrono::Utc;
 use tokio::time::{self, Duration};
 use std::net::IpAddr;
 use clap::Parser;
+use log::{debug, info};
 use prologix_gpib_ethernet_controller_manager::errors::GpibControllerError;
 use crate::errors::BatTestError;
 use prologix_gpib_ethernet_controller_manager::gpib_controller::GpibController;
 use crate::cli_struct::CliArgs;
+
 
 #[tokio::main]
 async fn main() -> Result<(), BatTestError> {
     let call_time = Utc::now();
     let args = CliArgs::parse();
     let mut output = Writer::from_path(&args.output_file)?;
-    println!("opened csv");
+    info!("opened csv");
 
     let mut watts_sum: f64 = 0f64;
     let mut amps_sum: f64 = 0f64;
@@ -36,7 +38,7 @@ async fn main() -> Result<(), BatTestError> {
     controller.gpib_send_to_addr("*IDN?\n", args.gpib_addr)?;
     let raw_target_device_info = controller.read_data()?;
     let target_device_info = &raw_target_device_info[0..raw_target_device_info.len() - 2];
-    println!("Target device identification: {}", target_device_info);
+    info!("Target device identification: {}", target_device_info);
     output.write_record(&["Target device identification", &target_device_info, "whatever the device on the given address responded to `*IDN?` with"])?;
 
     controller.gpib_send_to_addr("INPUT OFF\n", args.gpib_addr)?;
@@ -53,7 +55,7 @@ async fn main() -> Result<(), BatTestError> {
     output.write_record(&["time", "voltage", "current"])?;
     output.flush()?;
     controller.gpib_send_to_addr("INPUT ON\n", args.gpib_addr)?;
-    println!("turned on test");
+    info!("turned on test");
     let start_time = std::time::SystemTime::now();
     let mut voltage: f64;
     let mut current: f64;
@@ -61,7 +63,7 @@ async fn main() -> Result<(), BatTestError> {
 
     let interval_delay = Duration::from_secs_f64(60f64 / args.polling_rate);
 
-    println!("interval delay: {:?}", interval_delay);
+    debug!("interval delay: {:?}", interval_delay);
 
     let mut interval = time::interval(interval_delay);
 
@@ -78,7 +80,7 @@ async fn main() -> Result<(), BatTestError> {
         amps_sum += current;
         watts_sum += current * voltage;
         entries += 1;
-        println!("{} amps\t\t{} volts", current, voltage);
+        debug!("{} amps\t\t{} volts", current, voltage);
     }
     let total_hours = start_time.elapsed()?.as_secs_f64() / 3600f64;
     controller.gpib_send_to_addr("INPUT OFF\n", args.gpib_addr)?;
@@ -87,7 +89,7 @@ async fn main() -> Result<(), BatTestError> {
     let avg_watts = watts_sum / entries as f64;
     let total_amp_hours = avg_amps * total_hours;
     let total_watt_hours = avg_watts * total_hours;
-    println!("Discharge complete. Sucked {} watt hours and {} amp hours out of that bad boy.", total_watt_hours, total_amp_hours);
+    info!("Discharge complete. Sucked {} watt hours and {} amp hours out of that bad boy.", total_watt_hours, total_amp_hours);
     output.write_record(&["", "", ""])?;
     output.write_record(&["Finish time", "Watt hours", "Amp hours"])?;
     output.write_record(&[
@@ -124,9 +126,12 @@ pub fn sci_not_to_float(str_in: &str) -> Result<f64, BatTestError> {
     Ok(float_base * (10f64.powi(scale_int)))
 }
 
-pub fn gpib_send_and_listen_wrapper(gpib_controller: &mut GpibController, message: &str, gpib_address: u8) -> Result<Option<String>, BatTestError>{
+pub fn gpib_send_and_listen_wrapper(gpib_controller: &mut GpibController, message: &str, gpib_address: u8, ignore_response: bool) -> Result<Option<String>, BatTestError>{
     gpib_controller.gpib_send_to_addr(message, gpib_address)?;
 
+    if ignore_response {
+        return Ok(None)
+    }
     match gpib_controller.read_data() {
         Ok(s) => {
             Ok(Some(s.to_string()))

@@ -393,6 +393,7 @@ dependencies = [
  "chrono",
  "clap",
  "csv",
+ "log",
  "prologix-gpib-ethernet-controller-manager",
  "reqwest",
  "thiserror",
